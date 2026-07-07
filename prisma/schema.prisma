@@ -1,0 +1,587 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================================
+// 1. AUTH & USER
+// ============================================================================
+
+enum UserRole {
+  CLIENT
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  phone         String    @unique
+  password      String // hashed
+  role          UserRole  @default(CLIENT)
+  emailVerified Boolean   @default(false)
+  avatarUrl     String?
+  deletedAt     DateTime? // soft delete: null = aktif, terisi = akun dihapus (data historis tetap utuh)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  orders               Order[]
+  payments             Payment[]            @relation("PaymentUploadedBy")
+  clientRequests       ClientRequest[]
+  rescheduleRequests   RescheduleRequest[]
+  notifications        Notification[]
+  passwordResetTokens  PasswordResetToken[]
+  vendorReviews        VendorReview[]
+  preparationUpdatedBy PreparationTask[]    @relation("PreparationUpdatedBy")
+  verifiedPayments     Payment[]            @relation("PaymentVerifiedBy")
+
+  @@index([email])
+  @@index([phone])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+// ============================================================================
+// 2. PACKAGE (Silver, Gold, Platinum)
+// ============================================================================
+
+enum PackageTier {
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+model Package {
+  id              String      @id @default(cuid())
+  tier            PackageTier @unique
+  name            String // e.g. "Paket Silver"
+  description     String?
+  basePrice       Decimal     @db.Decimal(14, 2)
+  guestCapacity   Int // jumlah tamu yang di-cover paket ini
+  thumbnailUrl    String?
+  isActive        Boolean     @default(true)
+  displayOrder    Int         @default(0)
+  deletedAt       DateTime? // soft delete: paket dihapus admin tetap tersimpan karena dirujuk Order lama
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  packageVendors PackageVendor[] // vendor default yang ditawarkan di paket ini
+  orders         Order[]
+
+  @@index([deletedAt])
+  @@map("packages")
+}
+
+// Relasi default vendor per paket -> menentukan vendor mana yang "ditawarkan"
+// untuk masing-masing kategori di dalam suatu paket (ditampilkan di step order form)
+model PackageVendor {
+  id        String         @id @default(cuid())
+  packageId String
+  vendorId  String
+  category  VendorCategory // redundant tapi mempermudah query filter per kategori
+  isDefault Boolean        @default(true) // true = included tanpa biaya tambahan
+  createdAt DateTime       @default(now())
+
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  vendor  Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, vendorId])
+  @@index([packageId, category])
+  @@map("package_vendors")
+}
+
+// ============================================================================
+// 3. VENDOR (Gedung, MUA, Photographer, Dekorasi, Catering)
+// ============================================================================
+
+enum VendorCategory {
+  VENUE // gedung pernikahan
+  MUA
+  PHOTOGRAPHER
+  DECORATION
+  CATERING
+}
+
+model Vendor {
+  id           String         @id @default(cuid())
+  category     VendorCategory
+  name         String
+  description  String?
+  basePrice    Decimal        @db.Decimal(14, 2) // harga dasar (di luar paket catering menu)
+  upgradeFee   Decimal        @default(0) @db.Decimal(14, 2) // biaya tambahan jika dipilih sbg upgrade di luar default paket
+  location     String? // khusus relevan untuk VENUE
+  capacity     Int? // khusus relevan untuk VENUE
+  facilities   String[] // khusus VENUE: ["AC", "Parkir", "Sound System"]
+  thumbnailUrl String?
+  isActive     Boolean        @default(true)
+  ratingAvg    Decimal        @default(0) @db.Decimal(3, 2)
+  ratingCount  Int            @default(0)
+  deletedAt    DateTime? // soft delete: vendor dihapus admin tetap tersimpan karena dirujuk OrderVendor lama
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  // Relations
+  portfolios     VendorPortfolio[]
+  availabilities VendorAvailability[]
+  cateringMenus  CateringMenu[] // hanya terisi jika category = CATERING
+  packageVendors PackageVendor[]
+  orderVendors   OrderVendor[]
+  reviews        VendorReview[]
+
+  @@index([category])
+  @@index([deletedAt])
+  @@map("vendors")
+}
+
+// Galeri portfolio vendor (foto/video hasil kerja)
+model VendorPortfolio {
+  id        String   @id @default(cuid())
+  vendorId  String
+  mediaUrl  String
+  mediaType String   @default("image") // image | video
+  caption   String?
+  createdAt DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([vendorId])
+  @@map("vendor_portfolios")
+}
+
+// Tanggal yang sudah di-blok (penuh/cuti) untuk vendor tertentu
+// dipakai untuk validasi availability di step 1 (gedung) & step 2-4 (MUA, photographer, dekorasi)
+model VendorAvailability {
+  id        String   @id @default(cuid())
+  vendorId  String
+  date      DateTime @db.Date
+  isBlocked Boolean  @default(true) // true = tidak available di tanggal ini
+  reason    String? // "Booked", "Cuti", dll
+  orderId   String? // referensi order yang membuat tanggal ini terblok (jika karena booking)
+  createdAt DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  order  Order? @relation(fields: [orderId], references: [id])
+
+  @@unique([vendorId, date])
+  @@index([vendorId, date])
+  @@map("vendor_availabilities")
+}
+
+// Paket menu catering (khusus vendor category = CATERING)
+// satu vendor catering bisa punya banyak pilihan paket menu (Menu A, Menu B, dst)
+model CateringMenu {
+  id            String   @id @default(cuid())
+  vendorId      String
+  name          String // e.g. "Menu Nusantara"
+  description   String?
+  pricePerPax   Decimal  @db.Decimal(14, 2)
+  menuItems     String[] // list item menu, e.g. ["Nasi", "Ayam Bakar", "Sop Buntut"]
+  isActive      Boolean  @default(true)
+  deletedAt     DateTime? // soft delete: menu dihapus vendor tetap tersimpan karena dirujuk OrderVendor lama
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  vendor      Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  orderVendor OrderVendor[] // order yang memilih menu ini
+
+  @@index([vendorId])
+  @@index([deletedAt])
+  @@map("catering_menus")
+}
+
+// Review/rating vendor dari client setelah wedding selesai
+model VendorReview {
+  id        String   @id @default(cuid())
+  vendorId  String
+  userId    String
+  orderId   String
+  rating    Int // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, vendorId]) // satu review per vendor per order
+  @@index([vendorId])
+  @@map("vendor_reviews")
+}
+
+// ============================================================================
+// 4. ORDER (Multi-step form result)
+// ============================================================================
+
+enum OrderStatus {
+  DRAFT // sedang diisi multi-step form, belum submit final (fitur "lanjutkan nanti")
+  PENDING_PAYMENT // sudah submit, menunggu DP
+  DP_REVIEW // bukti transfer DP diupload, menunggu verifikasi admin
+  IN_PREPARATION // DP confirmed, sedang proses persiapan, menunggu pelunasan
+  FULLY_PAID // pelunasan confirmed
+  COMPLETED // wedding sudah selesai dilaksanakan
+  CANCELLED
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  orderNumber  String      @unique // e.g. "WO-2026-0001"
+  userId       String
+  packageId    String
+  status       OrderStatus @default(DRAFT)
+
+  // Step 1: tanggal (lokasi/gedung disimpan via relasi OrderVendor dengan category = VENUE)
+  weddingDate  DateTime? @db.Date
+
+  // Pricing snapshot (dihitung saat checkout, supaya tidak berubah walau harga master berubah di kemudian hari)
+  packageBasePrice   Decimal @default(0) @db.Decimal(14, 2)
+  vendorUpgradeTotal Decimal @default(0) @db.Decimal(14, 2)
+  addOnTotal         Decimal @default(0) @db.Decimal(14, 2)
+  grandTotal         Decimal @default(0) @db.Decimal(14, 2)
+
+  guestCount   Int? // jumlah tamu aktual (dipakai untuk kalkulasi catering)
+  specialNotes String? // catatan/request khusus dari step 6
+
+  submittedAt  DateTime? // waktu order final disubmit (beda dgn createdAt yg bisa jadi saat draft dibuat)
+  completedAt  DateTime? // waktu wedding selesai dilaksanakan
+  deletedAt    DateTime? // soft delete: order yang "dihapus" tetap tersimpan untuk audit/laporan finansial
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relations
+  user                User                 @relation(fields: [userId], references: [id])
+  package             Package              @relation(fields: [packageId], references: [id])
+  orderVendors        OrderVendor[]
+  orderAddOns         OrderAddOn[]
+  payments            Payment[]
+  invoices            Invoice[]
+  preparationTasks    PreparationTask[]
+  rsvpLink            RsvpLink?
+  clientRequests      ClientRequest[]
+  rescheduleRequests  RescheduleRequest[]
+  vendorAvailabilities VendorAvailability[]
+  vendorReviews       VendorReview[]
+  notifications       Notification[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([weddingDate])
+  @@index([deletedAt])
+  @@map("orders")
+}
+
+// Vendor yang dipilih client untuk masing-masing kategori dalam satu order
+// (gedung, MUA, photographer, dekorasi, catering -> step 1-5 di multi-step form)
+model OrderVendor {
+  id             String         @id @default(cuid())
+  orderId        String
+  category       VendorCategory
+  vendorId       String
+  cateringMenuId String? // hanya terisi jika category = CATERING (step 5b)
+  isUpgrade      Boolean        @default(false) // true jika vendor ini di luar default paket
+  priceAtBooking Decimal        @db.Decimal(14, 2) // snapshot harga saat dipilih (basePrice/upgradeFee atau pricePerPax x guestCount)
+  createdAt      DateTime       @default(now())
+
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vendor       Vendor        @relation(fields: [vendorId], references: [id])
+  cateringMenu CateringMenu? @relation(fields: [cateringMenuId], references: [id])
+
+  @@unique([orderId, category]) // satu order hanya boleh punya 1 vendor per kategori
+  @@index([orderId])
+  @@index([vendorId])
+  @@map("order_vendors")
+}
+
+// Add-on tambahan di luar vendor utama (misal: live cooking station, dessert table)
+model OrderAddOn {
+  id        String   @id @default(cuid())
+  orderId   String
+  name      String
+  price     Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_add_ons")
+}
+
+// ============================================================================
+// 5. PAYMENT (DP 50% + Pelunasan 50%, manual transfer + verifikasi admin)
+// ============================================================================
+
+enum PaymentTermType {
+  DOWN_PAYMENT // DP 50%
+  FINAL_PAYMENT // pelunasan 50%
+}
+
+enum PaymentStatus {
+  PENDING_UPLOAD // termin dibuat, client belum upload bukti transfer
+  WAITING_VERIFICATION // bukti transfer sudah diupload, menunggu admin
+  APPROVED
+  REJECTED
+}
+
+model Payment {
+  id              String          @id @default(cuid())
+  orderId         String
+  termType        PaymentTermType
+  amountDue       Decimal         @db.Decimal(14, 2)
+  amountTransferred Decimal?      @db.Decimal(14, 2) // nominal yang diinput client saat upload bukti
+  status          PaymentStatus   @default(PENDING_UPLOAD)
+
+  proofImageUrl   String? // bukti transfer (image/PDF)
+  transferDate    DateTime? // tanggal transfer yang diinput client
+  bankAccountId   String? // rekening tujuan yang dipakai (referensi PaymentAccount)
+
+  uploadedById    String? // client yang upload
+  uploadedAt      DateTime?
+
+  verifiedById    String? // admin yang verifikasi
+  verifiedAt      DateTime?
+  rejectionReason String?
+
+  deletedAt       DateTime? // soft delete: data finansial tidak boleh hilang permanen meski terjadi kesalahan input
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  uploadedBy  User?           @relation("PaymentUploadedBy", fields: [uploadedById], references: [id])
+  verifiedBy  User?           @relation("PaymentVerifiedBy", fields: [verifiedById], references: [id])
+  bankAccount PaymentAccount? @relation(fields: [bankAccountId], references: [id])
+  invoice     Invoice?
+
+  @@index([orderId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("payments")
+}
+
+// Rekening tujuan pembayaran yang dikonfigurasi admin (bisa multiple bank)
+model PaymentAccount {
+  id            String   @id @default(cuid())
+  bankName      String
+  accountNumber String
+  accountHolder String
+  isActive      Boolean  @default(true)
+  deletedAt     DateTime? // soft delete: rekening lama tetap tersimpan karena dirujuk histori Payment
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  payments Payment[]
+
+  @@index([deletedAt])
+  @@map("payment_accounts")
+}
+
+// ============================================================================
+// 6. INVOICE
+// ============================================================================
+
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique // e.g. "INV-2026-0001"
+  orderId       String
+  paymentId     String   @unique // 1 invoice per termin payment
+  amount        Decimal  @db.Decimal(14, 2)
+  issuedAt      DateTime @default(now())
+  pdfUrl        String?
+  deletedAt     DateTime? // soft delete: dokumen finansial/pajak tidak boleh dihapus permanen
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([deletedAt])
+  @@map("invoices")
+}
+
+// ============================================================================
+// 7. PREPARATION PROGRESS (checklist/timeline yang diupdate admin)
+// ============================================================================
+
+enum PreparationStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+model PreparationTask {
+  id            String            @id @default(cuid())
+  orderId       String
+  title         String // e.g. "Survey lokasi", "Fitting baju", "Gladi resik"
+  description   String?
+  status        PreparationStatus @default(PENDING)
+  sortOrder     Int               @default(0)
+  dueDate       DateTime?
+  completedAt   DateTime?
+  updatedById   String? // admin yang terakhir update
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("PreparationUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([orderId])
+  @@map("preparation_tasks")
+}
+
+// ============================================================================
+// 8. RSVP (link publik untuk tamu + tracker di client dashboard)
+// ============================================================================
+
+model RsvpLink {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  slug      String   @unique // dipakai di URL publik: /rsvp/[slug]
+  groomName String?
+  brideName String?
+  eventInfo String? // detail tambahan ditampilkan di halaman publik (alamat, dll)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order       Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  submissions RsvpSubmission[]
+
+  @@index([slug])
+  @@map("rsvp_links")
+}
+
+enum RsvpAttendance {
+  ATTENDING
+  NOT_ATTENDING
+}
+
+model RsvpSubmission {
+  id           String         @id @default(cuid())
+  rsvpLinkId   String
+  guestName    String
+  guestCount   Int            @default(1) // jumlah orang yang hadir (termasuk diri sendiri)
+  attendance   RsvpAttendance
+  message      String? // ucapan/doa
+  submittedAt  DateTime       @default(now())
+
+  rsvpLink RsvpLink @relation(fields: [rsvpLinkId], references: [id], onDelete: Cascade)
+
+  @@index([rsvpLinkId])
+  @@map("rsvp_submissions")
+}
+
+// ============================================================================
+// 9. CLIENT REQUEST & RESCHEDULE
+// ============================================================================
+
+enum RequestStatus {
+  PENDING
+  RESPONDED
+  APPROVED
+  REJECTED
+}
+
+// Komunikasi/request khusus dari client ke admin (misal: ganti menu, request dekorasi tambahan)
+model ClientRequest {
+  id          String        @id @default(cuid())
+  orderId     String
+  userId      String
+  subject     String
+  message     String
+  status      RequestStatus @default(PENDING)
+  adminReply  String?
+  repliedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@map("client_requests")
+}
+
+// Request perubahan tanggal wedding, perlu approval admin + cek ulang availability vendor
+model RescheduleRequest {
+  id              String        @id @default(cuid())
+  orderId         String
+  userId          String
+  currentDate     DateTime      @db.Date
+  requestedDate   DateTime      @db.Date
+  reason          String?
+  status          RequestStatus @default(PENDING)
+  adminNote       String?
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@map("reschedule_requests")
+}
+
+// ============================================================================
+// 10. NOTIFICATION
+// ============================================================================
+
+enum NotificationType {
+  PAYMENT_REMINDER
+  PAYMENT_APPROVED
+  PAYMENT_REJECTED
+  PREPARATION_UPDATE
+  REQUEST_REPLIED
+  RESCHEDULE_UPDATE
+  RSVP_NEW_SUBMISSION
+  GENERAL
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  orderId   String?
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id])
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ============================================================================
+// 11. ADMIN SETTINGS
+// ============================================================================
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g. "terms_and_conditions", "faq", "company_info"
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("site_settings")
+}
