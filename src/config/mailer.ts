@@ -95,3 +95,47 @@ export async function sendWelcomeEmail(data: {
     `,
   });
 }
+
+// ============================================================================
+// TAMBAHKAN fungsi ini ke src/config/mailer.ts
+// (di bawah fungsi sendWelcomeEmail yang sudah ada)
+// ============================================================================
+
+export async function sendPasswordResetEmail(data: {
+  to: string;
+  name: string;
+  token: string;
+  expiresInHours: number;
+}): Promise<void> {
+  const resetUrl = `${env.frontendUrl}/reset-password?token=${data.token}`;
+
+  await sendMail({
+    to: data.to,
+    subject: "Reset Password — Wedding Organizer Platform",
+    html: `
+      <p>Halo <strong>${data.name}</strong>,</p>
+      <p>Kami menerima permintaan reset password untuk akun Anda.</p>
+      <p>Klik link berikut untuk membuat password baru:</p>
+      <p>
+        <a href="${resetUrl}" style="
+          display: inline-block;
+          padding: 12px 24px;
+          background: #8b3a52;
+          color: white;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: bold;
+        ">
+          Reset Password
+        </a>
+      </p>
+      <p>Link ini akan kedaluwarsa dalam <strong>${data.expiresInHours} jam</strong>.</p>
+      <p>Jika Anda tidak merasa melakukan permintaan ini, abaikan email ini.
+      Password Anda tidak akan berubah.</p>
+      <p style="color: #6b6b6b; font-size: 12px;">
+        Jika tombol tidak berfungsi, salin dan tempel URL ini ke browser:<br/>
+        ${resetUrl}
+      </p>
+    `,
+  });
+}
