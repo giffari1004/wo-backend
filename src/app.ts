@@ -9,6 +9,7 @@ import { requestLogger } from "./config/logger";
 import swaggerUi from "swagger-ui-express"
 import { swaggerSpec } from "./config/swagger";
 import authRoutes from "./modules/auth/auth.routes";
+import packageRoutes from "./modules/packages/package.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -55,7 +56,7 @@ export function createApp(): Application {
 
   // ── Routes ────────────────────────────────────────
   app.use(`${env.apiPrefix}/auth`, authRoutes);
-  // app.use(`${env.apiPrefix}/packages`, packageRoutes);
+  app.use(`${env.apiPrefix}/packages`, packageRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──
