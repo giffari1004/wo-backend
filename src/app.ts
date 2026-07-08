@@ -11,6 +11,7 @@ import { swaggerSpec } from "./config/swagger";
 import authRoutes from "./modules/auth/auth.routes";
 import packageRoutes from "./modules/packages/package.routes";
 import vendorRoutes from "./modules/vendors/vendor.routes";
+import cateringMenuRoutes from "./modules/catering-menu/catering-menu.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -59,6 +60,7 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/auth`, authRoutes);
   app.use(`${env.apiPrefix}/packages`, packageRoutes);
   app.use(`${env.apiPrefix}/vendors`, vendorRoutes);
+  app.use(`${env.apiPrefix}/vendors`, cateringMenuRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──
