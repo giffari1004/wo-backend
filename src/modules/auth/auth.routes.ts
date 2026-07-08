@@ -27,7 +27,7 @@ import { authRateLimiter } from "@/middlewares/rateLimit.middleware";
 //   DELETE /api/v1/auth/delete-account
 // ============================================================================
 
-const router = Router();
+const authRoutes = Router();
 
 // ── Public routes ─────────────────────────────────────────────────────────────
 
@@ -70,7 +70,7 @@ const router = Router();
  *       409:
  *         description: Email atau nomor HP sudah terdaftar
  */
-router.post(
+authRoutes.post(
   "/register",
   authRateLimiter,
   validate(registerSchema),
@@ -103,7 +103,7 @@ router.post(
  *       401:
  *         description: Email atau password salah
  */
-router.post(
+authRoutes.post(
   "/login",
   authRateLimiter,
   validate(loginSchema),
@@ -132,7 +132,7 @@ router.post(
  *       200:
  *         description: Response selalu sama terlepas email terdaftar atau tidak
  */
-router.post(
+authRoutes.post(
   "/forgot-password",
   authRateLimiter,
   validate(forgotPasswordSchema),
@@ -166,7 +166,7 @@ router.post(
  *       400:
  *         description: Token tidak valid atau sudah expired
  */
-router.post(
+authRoutes.post(
   "/reset-password",
   validate(resetPasswordSchema),
   authController.resetPassword,
@@ -188,7 +188,7 @@ router.post(
  *       401:
  *         description: Token tidak ditemukan atau tidak valid
  */
-router.get("/me", authenticate, authController.getMe);
+authRoutes.get("/me", authenticate, authController.getMe);
 
 /**
  * @swagger
@@ -218,7 +218,7 @@ router.get("/me", authenticate, authController.getMe);
  *       400:
  *         description: Password saat ini tidak sesuai
  */
-router.patch(
+authRoutes.patch(
   "/change-password",
   authenticate,
   validate(changePasswordSchema),
@@ -237,6 +237,6 @@ router.patch(
  *       200:
  *         description: Akun berhasil dihapus
  */
-router.delete("/delete-account", authenticate, authController.deleteAccount);
+authRoutes.delete("/delete-account", authenticate, authController.deleteAccount);
 
-export default router;
+export default authRoutes;
