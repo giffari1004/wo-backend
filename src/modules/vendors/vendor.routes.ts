@@ -12,11 +12,11 @@ import {
   getVendorsQuerySchema,
 } from "./vendor.schema";
 
-const router = Router();
+const vendorRoutes = Router();
 
 // ── 1. ROUTE STATIS & SUB-RESOURCE INDEPENDEN (WAJIB DI ATAS) ───────────────
 
-router.get(
+vendorRoutes.get(
   "/admin/master-list",
   authenticate,
   authorize("ADMIN"),
@@ -24,7 +24,7 @@ router.get(
   vendorController.getAllVendorsForAdmin,
 );
 
-router.delete(
+vendorRoutes.delete(
   "/portfolios/:portfolioId",
   authenticate,
   authorize("ADMIN"),
@@ -34,7 +34,7 @@ router.delete(
 
 // ── 2. PUBLIC LIST RESOURCE ─────────────────────────────────────────────────
 
-router.get(
+vendorRoutes.get(
   "/",
   validate(getVendorsQuerySchema, "query"),
   vendorController.getPublicVendors,
@@ -42,13 +42,13 @@ router.get(
 
 // ── 3. WILDCARD DYNAMIC PARAMETERS ENDPOINTS (DI BAWAH) ─────────────────────
 
-router.get(
+vendorRoutes.get(
   "/:id",
   validate(vendorIdParamSchema, "params"),
   vendorController.getVendorById,
 );
 
-router.post(
+vendorRoutes.post(
   "/",
   authenticate,
   authorize("ADMIN"),
@@ -56,7 +56,7 @@ router.post(
   vendorController.createVendor,
 );
 
-router.patch(
+vendorRoutes.patch(
   "/:id",
   authenticate,
   authorize("ADMIN"),
@@ -65,7 +65,7 @@ router.patch(
   vendorController.updateVendor,
 );
 
-router.delete(
+vendorRoutes.delete(
   "/:id",
   authenticate,
   authorize("ADMIN"),
@@ -73,7 +73,7 @@ router.delete(
   vendorController.deleteVendor,
 );
 
-router.post(
+vendorRoutes.post(
   "/:id/portfolios",
   authenticate,
   authorize("ADMIN"),
@@ -82,7 +82,7 @@ router.post(
   vendorController.addVendorPortfolio,
 );
 
-router.post(
+vendorRoutes.post(
   "/:id/availabilities",
   authenticate,
   authorize("ADMIN"),
@@ -91,4 +91,4 @@ router.post(
   vendorController.setVendorAvailability,
 );
 
-export default router;
+export default vendorRoutes;
