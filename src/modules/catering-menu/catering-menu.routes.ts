@@ -9,7 +9,7 @@ import {
   vendorIdParamSchema,
 } from "./catering-menu.schema";
 
-const router = Router();
+const cateringMenuRoutes = Router();
 
 // ============================================================================
 // CATERING MENU ROUTES
@@ -27,7 +27,7 @@ const router = Router();
  *     security:
  *       - bearerAuth: []
  */
-router.get(
+cateringMenuRoutes.get(
   "/admin/all",
   authenticate,
   authorize("ADMIN"),
@@ -42,7 +42,7 @@ router.get(
  *     tags: [Catering Menus]
  *     security: []
  */
-router.get(
+cateringMenuRoutes.get(
   "/vendor/:vendorId",
   validate(vendorIdParamSchema, "params"),
   cateringMenuController.getMenusByVendor,
@@ -50,7 +50,7 @@ router.get(
 
 // ── 2. GLOBAL SYSTEM CORE ENDPOINTS ─────────────────────────────────────────
 
-router.post(
+cateringMenuRoutes.post(
   "/",
   authenticate,
   authorize("ADMIN"),
@@ -60,13 +60,13 @@ router.post(
 
 // ── 3. DYNAMIC WILDCARD PARAMETERS (DI BAWAH) ───────────────────────────────
 
-router.get(
+cateringMenuRoutes.get(
   "/:id",
   validate(cateringMenuIdParamSchema, "params"),
   cateringMenuController.getMenuById,
 );
 
-router.patch(
+cateringMenuRoutes.patch(
   "/:id",
   authenticate,
   authorize("ADMIN"),
@@ -75,7 +75,7 @@ router.patch(
   cateringMenuController.updateCateringMenu,
 );
 
-router.delete(
+cateringMenuRoutes.delete(
   "/:id",
   authenticate,
   authorize("ADMIN"),
@@ -83,4 +83,4 @@ router.delete(
   cateringMenuController.deleteCateringMenu,
 );
 
-export default router;
+export default cateringMenuRoutes;
