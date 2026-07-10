@@ -63,10 +63,10 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/auth`, authRoutes);
   app.use(`${env.apiPrefix}/packages`, packageRoutes);
   app.use(`${env.apiPrefix}/vendors`, vendorRoutes);
-  app.use(`${env.apiPrefix}/vendors`, cateringMenuRoutes);
+  app.use(`${env.apiPrefix}/catering-menu`, cateringMenuRoutes);
   app.use(`${env.apiPrefix}/orders`, orderRoutes);
   app.use(`${env.apiPrefix}/order-vendors`, orderVendorRoutes);
-  app.use(`${env.apiPrefix}/order-vendors`, paymentRoutes);
+  app.use(`${env.apiPrefix}/payments`, paymentRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──
