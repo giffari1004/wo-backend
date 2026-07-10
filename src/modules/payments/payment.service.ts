@@ -1,12 +1,16 @@
 import { prisma } from "../../config/database";
 import { AppError } from "../../middlewares/error.middleware";
+import { logger } from "../../config/logger";
 import { deleteFile, uploadFile } from "../../utils/storage";
 import { env } from "../../config/env";
+import * as invoiceService from "../invoices/invoice.service";
+import * as notificationService from "../notifications/notification.service";
 import {
   Payment,
   PaymentStatus,
   OrderStatus,
   PaymentTermType,
+  NotificationType,
   UserRole,
 } from "@prisma/client";
 import type { UploadProofInput, VerifyPaymentInput } from "./payment.schema";
@@ -90,7 +94,7 @@ export async function verifyPayment(
 ): Promise<Payment> {
   const { status, rejectionReason } = input;
 
-  return prisma.$transaction(async (tx) => {
+  const verifiedPayment = await prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findUnique({
       where: { id: paymentId, deletedAt: null },
       include: { order: true },
@@ -115,7 +119,7 @@ export async function verifyPayment(
       );
     }
 
-    const verifiedPayment = await tx.payment.update({
+    const updatedPayment = await tx.payment.update({
       where: { id: paymentId },
       data: {
         status,
@@ -127,9 +131,16 @@ export async function verifyPayment(
     });
 
     if (status === PaymentStatus.APPROVED) {
-      // 🔴 SOLUSI BUG #1 & #2: Penyediaan marker TODO Integrasi modul Invoices & Notifications[cite: 6, 7]
-      // TODO: tx.invoice.create(...) -> Otomatisasi pembentukan berkas PDF Invoice[cite: 6, 7]
-      // TODO: tx.notification.create(...) -> Kirim trigger NotificationType.PAYMENT_APPROVED[cite: 7]
+      await notificationService.createNotification(tx, {
+        userId: payment.order.userId,
+        orderId: payment.orderId,
+        type: NotificationType.PAYMENT_APPROVED,
+        title: "Pembayaran Disetujui",
+        message:
+          payment.termType === PaymentTermType.DOWN_PAYMENT
+            ? `Uang muka (DP) untuk pesanan ${payment.order.orderNumber} telah disetujui. Pesanan Anda sekarang memasuki tahap persiapan.`
+            : `Pelunasan untuk pesanan ${payment.order.orderNumber} telah disetujui. Pembayaran Anda sudah lunas.`,
+      });
 
       if (payment.termType === PaymentTermType.DOWN_PAYMENT) {
         await tx.order.update({
@@ -153,7 +164,14 @@ export async function verifyPayment(
         });
       }
     } else if (status === PaymentStatus.REJECTED) {
-      // TODO: tx.notification.create(...) -> Kirim trigger NotificationType.PAYMENT_REJECTED[cite: 7]
+      await notificationService.createNotification(tx, {
+        userId: payment.order.userId,
+        orderId: payment.orderId,
+        type: NotificationType.PAYMENT_REJECTED,
+        title: "Pembayaran Ditolak",
+        message: `Bukti transfer untuk pesanan ${payment.order.orderNumber} ditolak. Alasan: ${rejectionReason ?? "-"}. Silakan unggah ulang bukti transfer yang valid.`,
+      });
+
       if (payment.termType === PaymentTermType.DOWN_PAYMENT) {
         await tx.order.update({
           where: { id: payment.orderId },
@@ -162,8 +180,35 @@ export async function verifyPayment(
       }
     }
 
-    return verifiedPayment;
+    return updatedPayment;
   });
+
+  // 🔴 FIX: integrasi invoice yang sebelumnya cuma jadi komentar TODO.
+  //
+  // SENGAJA dipanggil DI LUAR $transaction di atas, SETELAH commit berhasil.
+  // Alasannya sudah dibahas di invoice.service.ts: createInvoice merender PDF
+  // via Puppeteer + upload ke storage — kalau ini ikut di dalam transaksi DB
+  // utama, risiko timeout transaksi sangat tinggi dan bisa me-rollback
+  // approval pembayaran yang sebenarnya sah hanya karena render PDF lambat.
+  //
+  // Konsekuensinya: approval pembayaran TIDAK digantungkan pada suksesnya
+  // pembuatan invoice. Kalau createInvoice gagal (mis. Puppeteer error,
+  // storage down), status pembayaran & order TETAP ter-update dengan benar —
+  // errornya cuma dicatat di log, tidak dilempar ke admin sebagai kegagalan
+  // verifikasi. Invoice yang gagal generate bisa dibuat ulang belakangan
+  // (createInvoice sudah idempotent lewat pengecekan paymentId di awal).
+  if (status === PaymentStatus.APPROVED) {
+    try {
+      await invoiceService.createInvoice(paymentId);
+    } catch (error) {
+      logger.error(
+        error,
+        `Gagal membuat invoice otomatis untuk payment ${paymentId} — perlu digenerate ulang manual`,
+      );
+    }
+  }
+
+  return verifiedPayment;
 }
 
 // 🔴 SOLUSI BUG #4: Implementasi Endpoint GET Riwayat Pembayaran untuk Client & Admin[cite: 7]
