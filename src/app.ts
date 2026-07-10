@@ -15,6 +15,7 @@ import cateringMenuRoutes from "./modules/catering-menu/catering-menu.routes";
 import orderRoutes from "./modules/orders/order.routes";
 import orderVendorRoutes from "./modules/order-vendors/order-vendor.routes";
 import paymentRoutes from "./modules/payments/payment.routes";
+import invoiceRoutes from "./modules/invoice/invoice.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -67,6 +68,7 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/orders`, orderRoutes);
   app.use(`${env.apiPrefix}/order-vendors`, orderVendorRoutes);
   app.use(`${env.apiPrefix}/payments`, paymentRoutes);
+  app.use(`${env.apiPrefix}/payments`, invoiceRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──

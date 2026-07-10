@@ -1,5 +1,6 @@
 import { prisma } from "@/config/database";
 import { AppError } from "@/middlewares/error.middleware";
+import { withSerializableRetry } from "@/utils/prisma-retry";
 import {
   OrderVendor,
   OrderStatus,
