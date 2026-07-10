@@ -92,6 +92,23 @@ export function errorHandler(
       });
       return;
     }
+
+    // P2034: Serialization conflict / deadlock pada transaksi Serializable
+    // (mis. dua client rebutan tanggal vendor yang sama secara bersamaan).
+    // Seharusnya sudah ditangani oleh withSerializableRetry() di service layer;
+    // kalau tetap sampai sini artinya retry-nya sudah habis dan konfliknya
+    // masih terjadi terus-menerus. Jangan diperlakukan sebagai bug 500 —
+    // ini kondisi yang wajar terjadi di traffic tinggi, cukup minta user coba lagi.
+    if (err.code === "P2034") {
+      logger.warn(err, "Transaksi Serializable gagal setelah retry habis");
+      res.status(409).json({
+        success: false,
+        message:
+          "Terjadi permintaan bersamaan pada data yang sama. Silakan coba lagi.",
+        data: null,
+      });
+      return;
+    }
   }
 
   // 4. Error tak terduga — log full stack, jangan expose detail ke client
