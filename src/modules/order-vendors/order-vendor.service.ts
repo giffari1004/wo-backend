@@ -10,7 +10,7 @@ import {
 import type { SelectVendorInput } from "./order-vendor.schema";
 
 // ============================================================================
-// ORDER VENDOR SERVICE (REPAIRED & ROBUST VERSION)
+// ORDER VENDOR SERVICE (REPAIRED & ROBUST VERSION v2)
 // ============================================================================
 
 /**
@@ -22,170 +22,172 @@ export async function selectVendor(
 ): Promise<OrderVendor> {
   const { orderId, category, vendorId, cateringMenuId } = input;
 
-  // 🟡 SOLUSI RACE CONDITION: Membungkus seluruh rangkaian pembacaan & penulisan ke dalam Transaksi Atomis[cite: 7]
-  return prisma.$transaction(async (tx) => {
-    // 1. Ambil data order beserta relasi paket bawaannya untuk kebutuhan fallback kapasitas[cite: 5, 7]
-    const order = await tx.order.findFirst({
-      where: {
-        id: orderId,
-        userId,
-        status: OrderStatus.DRAFT,
-        deletedAt: null,
-      },
-      include: { package: true },
-    });
-    if (!order) {
-      throw new AppError(
-        "Aksi ditolak. Draf pesanan tidak ditemukan atau sudah diajukan",
-        404,
-      );
-    }
-
-    // 2. Pastikan master vendor eksis, sesuai kategori step, dan aktif
-    const vendor = await tx.vendor.findFirst({
-      where: { id: vendorId, category, isActive: true, deletedAt: null },
-    });
-    if (!vendor) {
-      throw new AppError(
-        `Master vendor aktif tidak ditemukan pada kategori ${category}`,
-        404,
-      );
-    }
-
-    // 3. Validasi perlindungan ketersediaan jadwal kalender (Pencegahan Double-Booking)
-    if (order.weddingDate) {
-      const isBooked = await tx.vendorAvailability.findFirst({
+  // 🟡 RACE CONDITION FIX: Isolation level dinaikkan ke Serializable.
+ 
+  return prisma.$transaction(
+    async (tx) => {
+      // 1. Ambil data order beserta relasi paket bawaannya untuk kebutuhan fallback kapasitas
+      const order = await tx.order.findFirst({
         where: {
-          vendorId,
-          date: order.weddingDate,
-          isBlocked: true,
-          NOT: { orderId }, // Abaikan jika diblokir oleh draf milik sendiri
-        },
-        include: { vendor: { select: { name: true } } },
-      });
-
-      if (isBooked) {
-        throw new AppError(
-          `Vendor '${isBooked.vendor.name}' sudah penuh atau dipesan pada tanggal tersebut`,
-          409,
-        );
-      }
-    }
-
-    // 4. Cek Relasi Paket Bawaan (Default vs Upgrade)
-    const isPackageDefault = await tx.packageVendor.findFirst({
-      where: { packageId: order.packageId, vendorId, isDefault: true },
-    });
-
-    let finalMenuId: string | null = null;
-    let priceSnapshot = new Prisma.Decimal(0);
-
-    // 🔴 SOLUSI BUG #1 & #3: Memisahkan cabang logis kategori CATERING agar tidak tertimpa[cite: 7]
-    if (category === VendorCategory.CATERING) {
-      if (!cateringMenuId) {
-        throw new AppError(
-          "Paket menu katering wajib dipilih jika memilih vendor kategori CATERING",
-          400,
-        );
-      }
-
-      const menu = await tx.cateringMenu.findFirst({
-        where: {
-          id: cateringMenuId,
-          vendorId,
-          isActive: true,
+          id: orderId,
+          userId,
+          status: OrderStatus.DRAFT,
           deletedAt: null,
         },
+        include: { package: true },
       });
-      if (!menu) {
+      if (!order) {
         throw new AppError(
-          "Paket menu katering pilihan tidak valid untuk vendor ini",
-          400,
+          "Aksi ditolak. Draf pesanan tidak ditemukan atau sudah diajukan",
+          404,
         );
       }
 
-      finalMenuId = menu.id;
-
-      // 🔴 SOLUSI BUG #3: Fallback ke package.guestCapacity jika order.guestCount kosong/null[cite: 5, 7]
-      const currentGuests =
-        order.guestCount && order.guestCount > 0
-          ? order.guestCount
-          : order.package.guestCapacity;
-
-      // Kalkulasi catering murni per pax × jumlah porsi (tidak dipengaruhi basePrice vendor)[cite: 2, 7]
-      priceSnapshot = new Prisma.Decimal(menu.pricePerPax).mul(currentGuests);
-    } else {
-      // 🔴 SOLUSI BUG #2: Mencegah Double-Charging untuk Vendor Non-Catering[cite: 7]
-      // Jika bawaan paket -> priceAtBooking = 0 (karena sudah di-cover oleh packageBasePrice)[cite: 5, 7]
-      // Jika di luar paket (Upgrade) -> Hanya bebankan upgradeFee saja (bukan basePrice + upgradeFee)[cite: 5, 7]
-      priceSnapshot = isPackageDefault
-        ? new Prisma.Decimal(0)
-        : new Prisma.Decimal(vendor.upgradeFee);
-    }
-
-    // 🔴 SOLUSI BUG #4: Sinkronisasi pembersihan data jika klien mengubah pilihan vendor lamanya[cite: 5, 7]
-    const existingSelection = await tx.orderVendor.findUnique({
-      where: { orderId_category: { orderId, category } },
-    });
-
-    if (
-      existingSelection &&
-      existingSelection.vendorId !== vendorId &&
-      order.weddingDate
-    ) {
-      // Hapus blokir jadwal dari vendor lama khusus untuk order ini
-      await tx.vendorAvailability.deleteMany({
-        where: {
-          orderId,
-          vendorId: existingSelection.vendorId,
-          date: order.weddingDate,
-        },
+      // 2. Pastikan master vendor eksis, sesuai kategori step, dan aktif
+      const vendor = await tx.vendor.findFirst({
+        where: { id: vendorId, category, isActive: true, deletedAt: null },
       });
-    }
+      if (!vendor) {
+        throw new AppError(
+          `Master vendor aktif tidak ditemukan pada kategori ${category}`,
+          404,
+        );
+      }
 
-    // 🔴 SOLUSI BUG #4: Menulis data pemblokiran resmi ke tabel VendorAvailability (Real-Time Booking)[cite: 5, 7]
-    if (order.weddingDate) {
-      await tx.vendorAvailability.upsert({
+      // 3. Validasi perlindungan ketersediaan jadwal kalender (Pencegahan Double-Booking)
+      if (order.weddingDate) {
+        const isBooked = await tx.vendorAvailability.findFirst({
+          where: {
+            vendorId,
+            date: order.weddingDate,
+            isBlocked: true,
+            NOT: { orderId }, // Abaikan jika diblokir oleh draf milik sendiri
+          },
+          include: { vendor: { select: { name: true } } },
+        });
+
+        if (isBooked) {
+          throw new AppError(
+            `Vendor '${isBooked.vendor.name}' sudah penuh atau dipesan pada tanggal tersebut`,
+            409,
+          );
+        }
+      }
+
+      // 4. Cek Relasi Paket Bawaan (Default vs Upgrade)
+      const isPackageDefault = await tx.packageVendor.findFirst({
+        where: { packageId: order.packageId, vendorId, isDefault: true },
+      });
+
+      let finalMenuId: string | null = null;
+      let priceSnapshot = new Prisma.Decimal(0);
+
+      if (category === VendorCategory.CATERING) {
+        if (!cateringMenuId) {
+          throw new AppError(
+            "Paket menu katering wajib dipilih jika memilih vendor kategori CATERING",
+            400,
+          );
+        }
+
+        const menu = await tx.cateringMenu.findFirst({
+          where: {
+            id: cateringMenuId,
+            vendorId,
+            isActive: true,
+            deletedAt: null,
+          },
+        });
+        if (!menu) {
+          throw new AppError(
+            "Paket menu katering pilihan tidak valid untuk vendor ini",
+            400,
+          );
+        }
+
+        finalMenuId = menu.id;
+
+        // Fallback ke package.guestCapacity jika order.guestCount kosong/null
+        const currentGuests =
+          order.guestCount && order.guestCount > 0
+            ? order.guestCount
+            : order.package.guestCapacity;
+
+        // Kalkulasi catering murni per pax × jumlah porsi (tidak dipengaruhi basePrice vendor)
+        priceSnapshot = new Prisma.Decimal(menu.pricePerPax).mul(currentGuests);
+      } else {
+        // Bawaan paket -> priceAtBooking = 0 (sudah di-cover packageBasePrice)
+        // Di luar paket (Upgrade) -> hanya bebankan upgradeFee saja
+        priceSnapshot = isPackageDefault
+          ? new Prisma.Decimal(0)
+          : new Prisma.Decimal(vendor.upgradeFee);
+      }
+
+      // 5. 🔴 FIX CLEANUP BLOK LAMA: bukan hanya saat ganti vendor, tapi juga saat tanggal berubah
+      //
+      
+      const existingSelection = await tx.orderVendor.findUnique({
+        where: { orderId_category: { orderId, category } },
+      });
+
+      if (existingSelection) {
+        await tx.vendorAvailability.deleteMany({
+          where: {
+            orderId,
+            vendorId: existingSelection.vendorId,
+          },
+        });
+      }
+
+      // 6. Tulis ulang blokir tanggal yang valid untuk pilihan vendor saat ini
+      if (order.weddingDate) {
+        await tx.vendorAvailability.upsert({
+          where: {
+            vendorId_date: { vendorId, date: order.weddingDate },
+          },
+          create: {
+            vendorId,
+            date: order.weddingDate,
+            isBlocked: true,
+            reason: `Di-booking sementara oleh Order draf ${order.orderNumber || orderId}`,
+            orderId,
+          },
+          update: {
+            isBlocked: true,
+            reason: `Di-booking sementara oleh Order draf ${order.orderNumber || orderId}`,
+            orderId,
+          },
+        });
+      }
+
+      // 7. Jalankan Upsert data pilihan vendor ke database
+      return tx.orderVendor.upsert({
         where: {
-          vendorId_date: { vendorId, date: order.weddingDate },
-        },
-        create: {
-          vendorId,
-          date: order.weddingDate,
-          isBlocked: true,
-          reason: `Di-booking sementara oleh Order draf ${order.orderNumber || orderId}`,
-          orderId,
+          orderId_category: { orderId, category },
         },
         update: {
-          isBlocked: true,
-          reason: `Di-booking sementara oleh Order draf ${order.orderNumber || orderId}`,
-          orderId,
+          vendorId,
+          cateringMenuId: finalMenuId,
+          isUpgrade: !isPackageDefault,
+          priceAtBooking: priceSnapshot,
         },
+        create: {
+          orderId,
+          category,
+          vendorId,
+          cateringMenuId: finalMenuId,
+          isUpgrade: !isPackageDefault,
+          priceAtBooking: priceSnapshot,
+        },
+        include: { vendor: true, cateringMenu: true },
       });
-    }
-
-    // 5. Jalankan Upsert data pilihan vendor ke database
-    return tx.orderVendor.upsert({
-      where: {
-        orderId_category: { orderId, category },
-      },
-      update: {
-        vendorId,
-        cateringMenuId: finalMenuId,
-        isUpgrade: !isPackageDefault,
-        priceAtBooking: priceSnapshot,
-      },
-      create: {
-        orderId,
-        category,
-        vendorId,
-        cateringMenuId: finalMenuId,
-        isUpgrade: !isPackageDefault,
-        priceAtBooking: priceSnapshot,
-      },
-      include: { vendor: true, cateringMenu: true },
-    });
-  });
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 5000, // ms menunggu slot transaksi kosong
+      timeout: 10000, // ms — dinaikkan dari default 5s karena Serializable + beberapa query berantai
+    },
+  );
 }
 
 /**
@@ -194,7 +196,7 @@ export async function selectVendor(
 export async function getVendorsByOrder(
   orderId: string,
   userId: string,
-  role: UserRole, // 🟢 SOLUSI KONSISTENSI: Mengganti string literal menjadi tipe Enum UserRole[cite: 5, 7]
+  role: UserRole,
 ): Promise<OrderVendor[]> {
   const orderExists = await prisma.order.findFirst({
     where: {
@@ -223,7 +225,7 @@ export async function getVendorByCategory(
   orderId: string,
   category: VendorCategory,
   userId: string,
-  role: UserRole, // 🟢 SOLUSI KONSISTENSI: Mengganti string literal menjadi tipe Enum UserRole[cite: 5, 7]
+  role: UserRole,
 ): Promise<OrderVendor> {
   const orderExists = await prisma.order.findFirst({
     where: {
