@@ -15,7 +15,8 @@ import cateringMenuRoutes from "./modules/catering-menu/catering-menu.routes";
 import orderRoutes from "./modules/orders/order.routes";
 import orderVendorRoutes from "./modules/order-vendors/order-vendor.routes";
 import paymentRoutes from "./modules/payments/payment.routes";
-import invoiceRoutes from "./modules/invoice/invoice.routes";
+import invoiceRoutes from "./modules/invoices/invoice.routes";
+import preparationRoutes from "./modules/preparations/preparation.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -36,6 +37,11 @@ export function createApp(): Application {
   // ── Request logging ───────────────────────────────
   app.use(requestLogger);
 
+  // ── Health check ──────────────────────────────────
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", env: env.nodeEnv });
+  });
+
   // ── Rate limiting (global) ────────────────────────
   app.use(rateLimiter);
 
@@ -55,11 +61,6 @@ export function createApp(): Application {
     res.send(swaggerSpec);
   });
 
-  // ── Health check ──────────────────────────────────
-  app.get("/health", (_req, res) => {
-    res.json({ status: "ok", env: env.nodeEnv });
-  });
-
   // ── Routes ────────────────────────────────────────
   app.use(`${env.apiPrefix}/auth`, authRoutes);
   app.use(`${env.apiPrefix}/packages`, packageRoutes);
@@ -68,7 +69,8 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/orders`, orderRoutes);
   app.use(`${env.apiPrefix}/order-vendors`, orderVendorRoutes);
   app.use(`${env.apiPrefix}/payments`, paymentRoutes);
-  app.use(`${env.apiPrefix}/payments`, invoiceRoutes);
+  app.use(`${env.apiPrefix}/invoices`, invoiceRoutes);
+  app.use(`${env.apiPrefix}/preparation`, preparationRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──
