@@ -17,6 +17,10 @@ import orderVendorRoutes from "./modules/order-vendors/order-vendor.routes";
 import paymentRoutes from "./modules/payments/payment.routes";
 import invoiceRoutes from "./modules/invoices/invoice.routes";
 import preparationRoutes from "./modules/preparations/preparation.routes";
+import rsvpRoutes from "./modules/rsvp/rsvp.routes";
+import clientRequestRoutes from "./modules/client-request/client-request.routes";
+import rescheduleRequestRoutes from "./modules/reschedule-request/reschedule-request.routes";
+import notificationRoutes from "./modules/notifications/notification.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -71,6 +75,10 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/payments`, paymentRoutes);
   app.use(`${env.apiPrefix}/invoices`, invoiceRoutes);
   app.use(`${env.apiPrefix}/preparation`, preparationRoutes);
+  app.use(`${env.apiPrefix}/rsvp`, rsvpRoutes);
+  app.use(`${env.apiPrefix}/client-request`, clientRequestRoutes);
+  // app.use(`${env.apiPrefix}/reschedule-request`, rescheduleRequestRoutes);
+  // app.use(`${env.apiPrefix}/notification`, notificationRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──
