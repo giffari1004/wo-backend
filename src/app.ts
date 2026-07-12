@@ -77,7 +77,7 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/preparation`, preparationRoutes);
   app.use(`${env.apiPrefix}/rsvp`, rsvpRoutes);
   app.use(`${env.apiPrefix}/client-request`, clientRequestRoutes);
-  // app.use(`${env.apiPrefix}/reschedule-request`, rescheduleRequestRoutes);
+  app.use(`${env.apiPrefix}/reschedule-request`, rescheduleRequestRoutes);
   // app.use(`${env.apiPrefix}/notification`, notificationRoutes);
   // ... tambahkan route lain di sini
 
