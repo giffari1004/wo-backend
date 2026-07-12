@@ -46,13 +46,13 @@ export const clientRequestController = {
   },
 
   // GET /admin/requests
-  async listAllForAdmin(
-    req: Request<{}, any, any, ListClientRequestQuery>,
-    res: Response,
-    next: NextFunction,
-  ) {
+  async listAllForAdmin(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await clientRequestService.listAllForAdmin(req.query);
+      // Cast manual — sama seperti admin-dashboard/notification, ParsedQs
+      // bawaan Express tidak kompatibel dengan tipe hasil coercion Zod
+      // (page/limit: number)
+      const query = req.query as unknown as ListClientRequestQuery;
+      const data = await clientRequestService.listAllForAdmin(query);
       return sendSuccess(res, data);
     } catch (err) {
       next(err);
