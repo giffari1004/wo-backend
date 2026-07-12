@@ -21,6 +21,8 @@ import rsvpRoutes from "./modules/rsvp/rsvp.routes";
 import clientRequestRoutes from "./modules/client-request/client-request.routes";
 import rescheduleRequestRoutes from "./modules/reschedule-request/reschedule-request.routes";
 import notificationRoutes from "./modules/notifications/notification.routes";
+import adminDashboardRoutes from "./modules/admin-dashboard/admin-dashboard.routes";
+import adminOrderRoutes from "./modules/admin-orders/admin-order.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -79,6 +81,8 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/client-request`, clientRequestRoutes);
   app.use(`${env.apiPrefix}/reschedule-request`, rescheduleRequestRoutes);
   app.use(`${env.apiPrefix}/notification`, notificationRoutes);
+  app.use(`${env.apiPrefix}/admin/dashboard`, adminDashboardRoutes);
+  app.use(`${env.apiPrefix}/admin/orders`, adminOrderRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──
