@@ -134,3 +134,163 @@ export function buildInvoiceHtml(data: {
 </body>
 </html>`;
 }
+
+/**
+ * Template HTML laporan revenue — dipakai admin/reports untuk export PDF.
+ * Ditambahkan sebagai fungsi terpisah, TIDAK mengubah buildInvoiceHtml yang
+ * sudah dipakai modul invoices.
+ */
+export function buildRevenueReportHtml(data: {
+  dateFrom: Date;
+  dateTo: Date;
+  groupBy: "day" | "month";
+  timeline: {
+    period: string;
+    totalRevenue: number;
+    dpRevenue: number;
+    finalRevenue: number;
+    paymentCount: number;
+  }[];
+  grandTotal: number;
+}): string {
+  const formatDate = (d: Date) =>
+    new Date(d).toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+
+  const rows = data.timeline
+    .map(
+      (row) => `<tr>
+        <td>${row.period}</td>
+        <td>Rp ${row.dpRevenue.toLocaleString("id-ID")}</td>
+        <td>Rp ${row.finalRevenue.toLocaleString("id-ID")}</td>
+        <td>Rp ${row.totalRevenue.toLocaleString("id-ID")}</td>
+        <td>${row.paymentCount}</td>
+      </tr>`,
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #2d2a2e; margin: 0; padding: 0; }
+    .header { background: #8b3a52; color: white; padding: 24px 32px; }
+    .header h1 { margin: 0; font-size: 20px; }
+    .header p { margin: 4px 0 0; font-size: 12px; opacity: 0.85; }
+    .body { padding: 32px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th { background: #f6ecef; text-align: left; padding: 8px 10px; font-size: 12px; }
+    td { padding: 8px 10px; border-bottom: 1px solid #e8e8e8; font-size: 12px; }
+    .total-row td { font-weight: bold; background: #f6ecef; font-size: 13px; }
+    .footer { margin-top: 24px; font-size: 11px; color: #6b6b6b; border-top: 1px solid #e8e8e8; padding-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Laporan Revenue</h1>
+    <p>Periode: ${formatDate(data.dateFrom)} — ${formatDate(data.dateTo)} (dikelompokkan per ${data.groupBy === "month" ? "bulan" : "hari"})</p>
+  </div>
+  <div class="body">
+    <table>
+      <thead>
+        <tr><th>Periode</th><th>Revenue DP</th><th>Revenue Pelunasan</th><th>Total</th><th>Jml Transaksi</th></tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr class="total-row"><td colspan="3">Grand Total</td><td>Rp ${data.grandTotal.toLocaleString("id-ID")}</td><td></td></tr>
+      </tbody>
+    </table>
+    <div class="footer">
+      Laporan ini dihitung dari pembayaran yang BERSTATUS APPROVED (uang riil sudah
+      diterima), bukan dari nilai kontrak/piutang. Diterbitkan otomatis oleh sistem
+      Wedding Organizer Platform pada ${new Date().toLocaleDateString("id-ID")}.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Template HTML laporan performa vendor — dipakai admin/reports untuk
+ * export PDF.
+ */
+export function buildVendorPerformanceReportHtml(data: {
+  dateFrom: Date | null;
+  dateTo: Date | null;
+  category: string | null;
+  vendors: {
+    vendorId: string;
+    vendorName: string;
+    category: string;
+    bookingCount: number;
+    totalRevenueGenerated: number;
+    ratingAvg: number;
+    ratingCount: number;
+  }[];
+}): string {
+  const formatDate = (d: Date | null) =>
+    d
+      ? new Date(d).toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        })
+      : "-";
+
+  const rows = data.vendors
+    .map(
+      (v, i) => `<tr>
+        <td>${i + 1}</td>
+        <td>${v.vendorName}</td>
+        <td>${v.category}</td>
+        <td>${v.bookingCount}</td>
+        <td>Rp ${v.totalRevenueGenerated.toLocaleString("id-ID")}</td>
+        <td>${v.ratingCount > 0 ? `${v.ratingAvg.toFixed(1)} (${v.ratingCount} ulasan)` : "Belum ada rating"}</td>
+      </tr>`,
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #2d2a2e; margin: 0; padding: 0; }
+    .header { background: #8b3a52; color: white; padding: 24px 32px; }
+    .header h1 { margin: 0; font-size: 20px; }
+    .header p { margin: 4px 0 0; font-size: 12px; opacity: 0.85; }
+    .body { padding: 32px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th { background: #f6ecef; text-align: left; padding: 8px 10px; font-size: 12px; }
+    td { padding: 8px 10px; border-bottom: 1px solid #e8e8e8; font-size: 12px; }
+    .footer { margin-top: 24px; font-size: 11px; color: #6b6b6b; border-top: 1px solid #e8e8e8; padding-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Laporan Performa Vendor</h1>
+    <p>Periode: ${formatDate(data.dateFrom)} — ${formatDate(data.dateTo)}${data.category ? ` · Kategori: ${data.category}` : ""}</p>
+  </div>
+  <div class="body">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Nama Vendor</th><th>Kategori</th><th>Jml Booking</th><th>Revenue Upgrade/Catering</th><th>Rating</th></tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+    <div class="footer">
+      "Revenue" di sini hanya mencakup upgrade fee / biaya catering — vendor yang
+      dipilih sebagai bawaan default paket tidak dikenakan biaya tambahan, jadi
+      kontribusinya 0 meskipun sering dipakai. Diterbitkan otomatis oleh sistem
+      Wedding Organizer Platform pada ${new Date().toLocaleDateString("id-ID")}.
+    </div>
+  </div>
+</body>
+</html>`;
+}
