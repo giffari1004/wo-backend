@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
-import * as adminDashboardService from "../admin-dashboard/admin-dashboard.service";
+import * as adminDashboardService from "./admin-dashboard.service";
 import { sendSuccess } from "../../middlewares/error.middleware";
-import type { DashboardQuery } from "../admin-dashboard/admin-dashboard.schema";
+import type { DashboardQuery } from "./admin-dashboard.schema";
 
 // ============================================================================
 // ADMIN DASHBOARD CONTROLLER (STRICT GENERIC TYPING)

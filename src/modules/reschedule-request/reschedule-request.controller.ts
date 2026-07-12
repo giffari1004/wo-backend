@@ -52,13 +52,12 @@ export const rescheduleRequestController = {
   },
 
   // GET /admin/reschedule
-  async listAllForAdmin(
-    req: Request<{}, any, any, ListRescheduleRequestQuery>,
-    res: Response,
-    next: NextFunction,
-  ) {
+  async listAllForAdmin(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await rescheduleRequestService.listAllForAdmin(req.query);
+      // Cast manual — sama seperti controller lain, ParsedQs bawaan Express
+      // tidak kompatibel dengan tipe hasil coercion Zod (page/limit: number)
+      const query = req.query as unknown as ListRescheduleRequestQuery;
+      const data = await rescheduleRequestService.listAllForAdmin(query);
       return sendSuccess(res, data);
     } catch (err) {
       next(err);
