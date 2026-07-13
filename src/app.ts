@@ -27,6 +27,8 @@ import adminPaymentRoutes from "./modules/admin-payments/admin-payment.routes";
 import adminCalendarRoutes from "./modules/admin-calendar/admin-calendar.routes";
 import adminClientRoutes from "./modules/admin-clients/admin-client.routes";
 import adminReportRoutes from "./modules/admin-reports/admin-report.routes";
+import siteSettingsRoutes from "./modules/site-settings/site-settings.routes";
+import adminSettingsRoutes from "./modules/site-settings/site-settings.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -91,6 +93,8 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/admin/calendar`, adminCalendarRoutes);
   app.use(`${env.apiPrefix}/admin/clients`, adminClientRoutes);
   app.use(`${env.apiPrefix}/admin/reports`, adminReportRoutes);
+  app.use(`${env.apiPrefix}/admin/settings`, adminSettingsRoutes); 
+  app.use(`${env.apiPrefix}/site-settings`, siteSettingsRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──

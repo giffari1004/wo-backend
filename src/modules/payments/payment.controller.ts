@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as paymentService from "./payment.service";
+import * as adminSettingsService from "../site-settings/site-settings.service";
 import { sendSuccess, AppError } from "../../middlewares/error.middleware";
 import type { UploadProofInput, VerifyPaymentInput } from "./payment.schema";
 
@@ -90,6 +91,25 @@ export async function getAdminVerificationQueue(
       result,
       "Antrean bukti transfer pembayaran berhasil diambil",
     );
+  } catch (err) {
+    next(err);
+  }
+}
+
+// 🆕 GAP FIX: Client butuh tahu rekening bank AKTIF sebelum upload bukti
+// transfer (uploadProofSchema mewajibkan `bankAccountId`). Reuse service dari
+// admin-settings — TIDAK menduplikasi query logic, cuma dipanggil dengan
+// includeInactive: false (client tidak pernah boleh lihat rekening nonaktif).
+export async function getActiveBankAccounts(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const result = await adminSettingsService.listBankAccounts({
+      includeInactive: false,
+    });
+    sendSuccess(res, result, "Daftar rekening bank aktif berhasil diambil");
   } catch (err) {
     next(err);
   }

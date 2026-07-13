@@ -19,6 +19,13 @@ paymentRoutes.use(authenticate);
 // PAYMENT MODULE ROUTES (Base Path: /api/v1/payments)
 // ============================================================================
 
+// 🆕 GAP FIX: endpoint client-facing (BUKAN admin-only) — dipakai client
+// untuk tahu ke rekening mana harus transfer, sebelum upload bukti.
+// Sengaja TIDAK pakai authorize(UserRole.ADMIN) — cukup authenticate biasa
+// dari paymentRoutes.use(authenticate) di atas, jadi CLIENT & ADMIN sama-sama
+// bisa akses.
+paymentRoutes.get("/bank-accounts", paymentController.getActiveBankAccounts);
+
 // 🔴 SOLUSI BUG #4: Pendaftaran Rute Ekstra GET untuk Dashboard Klien & Antrean Verifikasi Admin[cite: 2, 7]
 paymentRoutes.get(
   "/order/:orderId",
