@@ -29,6 +29,7 @@ import adminClientRoutes from "./modules/admin-clients/admin-client.routes";
 import adminReportRoutes from "./modules/admin-reports/admin-report.routes";
 import siteSettingsRoutes from "./modules/site-settings/site-settings.routes";
 import adminSettingsRoutes from "./modules/site-settings/site-settings.routes";
+import userProfileRoutes from "./modules/user-profile/user-profile.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -95,6 +96,7 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/admin/reports`, adminReportRoutes);
   app.use(`${env.apiPrefix}/admin/settings`, adminSettingsRoutes); 
   app.use(`${env.apiPrefix}/site-settings`, siteSettingsRoutes);
+  app.use(`${env.apiPrefix}/user/profile`, userProfileRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──
