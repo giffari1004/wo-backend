@@ -31,6 +31,7 @@ import userProfileRoutes from "./modules/user-profile/user-profile.routes";
 import adminSettingsRoutes from "./modules/site-settings/site-settings.routes";
 import siteSettingsRoutes from "./modules/public-site-settings/public-site-settings.routes";
 import uploadRoutes from "./modules/upload/upload.routes";
+import searchRoutes from "./modules/search/search.routes";
 
 
 // Route imports (ditambahkan satu per satu sesuai module yang dibuat)
@@ -99,6 +100,7 @@ export function createApp(): Application {
   app.use(`${env.apiPrefix}/site-settings`, siteSettingsRoutes);
   app.use(`${env.apiPrefix}/user/profile`, userProfileRoutes);
   app.use(`${env.apiPrefix}/upload`, uploadRoutes);
+  app.use(`${env.apiPrefix}/search`, searchRoutes);
   // ... tambahkan route lain di sini
 
   // ── Global error handler (HARUS di paling akhir) ──
